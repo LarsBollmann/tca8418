@@ -131,9 +131,8 @@ impl Config {
     pub const AI: u8 = 1 << 7;
 }
 
-
 /// A struct that represents the bits of the interrupt status register (INT_STAT).
-/// 
+///
 /// Create new ones using the constants. Supports bitwise OR, AND and NOT operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InterruptFlags(pub(crate) u8);
@@ -176,15 +175,21 @@ impl InterruptFlags {
 
 impl core::ops::BitOr for InterruptFlags {
     type Output = Self;
-    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
 }
 
 impl core::ops::BitAnd for InterruptFlags {
     type Output = Self;
-    fn bitand(self, rhs: Self) -> Self { Self(self.0 & rhs.0) }
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
 }
 
 impl core::ops::Not for InterruptFlags {
     type Output = Self;
-    fn not(self) -> Self { Self(!self.0 & 0x1F) }
+    fn not(self) -> Self {
+        Self(!self.0 & 0x1F)
+    }
 }

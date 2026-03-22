@@ -1,7 +1,7 @@
 //! This module includes types that define the different supported key types and events of the TCA8418.
 
 /// This struct represents a key in the keypad matrix.
-/// 
+///
 /// The row and column indices refer to the physical row and column pins on the TCA8418.
 /// The key_number field is the raw key number as reported by the TCA8418 (1-80)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,19 +22,13 @@ impl KeypadMatrixKey {
         let k = key_number - 1;
         let row = k / 10;
         let col = k % 10;
-        Some(Self {
-            row,
-            col,
-        })
+        Some(Self { row, col })
     }
 
     /// Create a key representing an element in the keypad matrix from row and col index
     pub fn from_row_col(row: u8, col: u8) -> Option<Self> {
         if row < 8 && col < 10 {
-            Some(Self {
-                row,
-                col,
-            })
+            Some(Self { row, col })
         } else {
             None
         }
@@ -47,7 +41,7 @@ impl KeypadMatrixKey {
 }
 
 /// This struct represents an input on a row or col pin configured as an GPI (not part of the keypad matrix).
-/// 
+///
 /// The index field represents which pin triggered the event. For row pins, index 0-7 corresponds to R0-R7. For column pins, index 0-9 corresponds to C0-C9.
 /// This type is wrapped in the `Key::RowGpi` and `Key::ColGpi` variants to represent GPIO events on row and column pins respectively.
 /// The key_number field is the raw key number as reported by the TCA8418, which is 97-104 for row GPIO pins and 105-114 for column GPIO pins.
@@ -58,7 +52,7 @@ pub struct GpiKey {
 }
 
 /// This enum represents any key that can generate an event in the TCA8418 FIFO.
-/// 
+///
 /// The TCA8418 distinguishes between keys configured as part of the keypad matrix and GPIO pins configured as inputs (GPI).
 /// - `Key::KeypadMatrixKey` represents a key in the keypad matrix, identified by its row and column indices.
 /// - `Key::RowGpi` represents a row GPIO pin configured as an input, identified by its row index (0-7).
@@ -81,9 +75,13 @@ impl Key {
                 key_number,
             )?))
         } else if (97..=104).contains(&key_number) {
-            Some(Key::RowGpi(GpiKey {index: key_number-97}))
+            Some(Key::RowGpi(GpiKey {
+                index: key_number - 97,
+            }))
         } else if (105..=114).contains(&key_number) {
-            Some(Key::ColGpi(GpiKey {index: key_number-105}))
+            Some(Key::ColGpi(GpiKey {
+                index: key_number - 105,
+            }))
         } else {
             None
         }
@@ -97,7 +95,7 @@ impl Key {
     /// Create a row gpi key from row index (0-7)
     pub fn row_gpi(row: u8) -> Option<Self> {
         if row > 7 {
-            return None
+            return None;
         }
         Some(Key::RowGpi(GpiKey { index: row }))
     }
@@ -105,7 +103,7 @@ impl Key {
     /// Create a column gpi key from column index (0-9)
     pub fn col_gpi(col: u8) -> Option<Self> {
         if col > 9 {
-            return None
+            return None;
         }
         Some(Key::ColGpi(GpiKey { index: col }))
     }
@@ -125,7 +123,7 @@ impl Key {
 // ============================================================================
 
 /// This type represents a single key event read from the TCA8418's key event FIFO.
-/// 
+///
 /// The `key_number` field is the raw key number as reported by the TCA8418.
 /// The `pressed` field indicates whether the event is a key press (`true`) or a key release (`false`).
 /// The `key` field can be used to get the [Key] enum variant, which distinguishes between keypad matrix keys and GPIO events.

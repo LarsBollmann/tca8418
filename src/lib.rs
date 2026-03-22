@@ -34,7 +34,7 @@
 //!  
 //! ```rust,ignore
 //! use tca8418::{Tca8418, PinMask, InterruptFlags};
-//! 
+//!
 //! #[embassy_executor::task]
 //! async fn keyboard_task(
 //!     mut keypad: Tca8418<I2c<'static>>,
