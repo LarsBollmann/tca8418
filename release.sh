@@ -32,7 +32,7 @@ sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
 cargo check --quiet
 
 # Commit and tag
-git add Cargo.toml
+git add Cargo.toml Cargo.lock
 git commit -m "release: $TAG"
 git tag "$TAG"
 
