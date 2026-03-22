@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2024"
 authors = ["Lars Bollmann"]
 description = "Platform-agnostic Rust driver for the TCA8418 I²C keypad scan IC"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 keywords = ["embedded", "tca8418", "keypad", "i2c", "no_std"]
 categories = ["embedded", "no-std", "hardware-support"]
 
