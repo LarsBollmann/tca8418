@@ -1,6 +1,6 @@
 [package]
 name = "tca8418"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Lars Bollmann"]
 description = "Platform-agnostic Rust driver for the TCA8418 I²C keypad scan IC"
