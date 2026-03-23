@@ -43,4 +43,11 @@ loop {
         }
     }
 }
+
 ```
+
+## Feature Flags
+
+| Feature | Description |
+|---------|-------------|
+| `defmt` | Implements `defmt::Format` on all public types for easy embedded logging |
