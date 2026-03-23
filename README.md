@@ -37,7 +37,7 @@ keypad.configure_keypad(pins).unwrap();
  
 // Poll for events
 loop {
-    for event in keypad.events().flatten() {
+    for event in keypad.events() {
         if let Some(key) = event.pressed_keypad() {
             // key.row, key.col
         }

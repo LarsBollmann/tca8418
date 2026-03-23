@@ -138,14 +138,14 @@ impl Key {
 /// # use tca8418::{Tca8418, PinMask, InterruptFlags, Key};
 /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
 /// // Handle only keypad presses, most common case
-/// for event in keypad.events().flatten() {
+/// for event in keypad.events()? {
 ///     if let Some(key) = event.pressed_keypad() {
 ///         let _ = (key.row, key.col);
 ///     }
 /// }
 ///
 /// // Handle different events separately
-/// for event in keypad.events().flatten() {
+/// for event in keypad.events()? {
 ///     // Is event a press or release?
 ///     let pressed = event.pressed;
 ///     

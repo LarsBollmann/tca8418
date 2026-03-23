@@ -51,7 +51,7 @@
 //!  
 //!     loop {
 //!         int_pin.wait_for_falling_edge().await;
-//!         for event in keypad.events().flatten() {
+//!         for event in keypad.events()? {
 //!             if let Some(key) = event.pressed_keypad() {
 //!                 // handle keypress
 //!             }
@@ -112,22 +112,22 @@ pub use events::{GpiKey, KeypadMatrixKey};
 pub const DEFAULT_ADDRESS: u8 = 0x34;
 
 #[doc(hidden)]
-pub struct EventIter<'a, I2C> {
-    driver: &'a mut Tca8418<I2C>,
+pub struct EventIter {
+    events: [Option<KeyEvent>; 10],
+    index: u8,
+    count: u8,
 }
 
-impl<'a, I2C, E> Iterator for EventIter<'a, I2C>
-where
-    I2C: I2c<Error = E>,
-{
-    type Item = Result<KeyEvent, Error<E>>;
+impl Iterator for EventIter {
+    type Item = KeyEvent;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.driver.read_event() {
-            Ok(Some(event)) => Some(Ok(event)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
+        if self.index >= self.count {
+            return None;
         }
+        let event = self.events[self.index as usize];
+        self.index += 1;
+        event
     }
 }
 
@@ -245,12 +245,23 @@ where
         Ok(KeyEvent::from_raw(raw))
     }
 
-    /// Returns an iterator that drains all pending events.
-    /// Clears the key event interrupt when dropped or exhausted.
-    pub fn events(&mut self) -> EventIter<'_, I2C> {
-        EventIter { driver: self }
+    /// Drain all pending events from the FIFO into a fixed-size array
+    /// and return an iterator over them.
+    ///
+    /// This reads the event count once, drains that many events,
+    /// and returns an iterator that requires no further I²C access.
+    pub fn events(&mut self) -> Result<EventIter, Error<E>> {
+        let count = self.event_count()?;
+        let mut events = [None; 10];
+        for i in 0..count.min(10) {
+            events[i as usize] = self.read_event()?;
+        }
+        Ok(EventIter {
+            events,
+            index: 0,
+            count: count.min(10),
+        })
     }
-
     /// Drain all pending events from the FIFO.
     ///
     /// Returns a `heapless`-style fixed-size array of up to 10 events.
