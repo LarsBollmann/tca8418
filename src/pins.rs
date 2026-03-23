@@ -27,6 +27,7 @@
 /// let mask = PinMask::ALL.without(PinMask::C9).without(PinMask::R7);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct PinMask(pub u32);
 
 impl PinMask {

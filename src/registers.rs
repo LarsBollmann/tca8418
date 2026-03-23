@@ -7,6 +7,7 @@
 /// Register map for the TCA8418
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
 pub enum Register {
     /// Reserved
@@ -135,6 +136,7 @@ impl Config {
 ///
 /// Create new ones using the constants. Supports bitwise OR, AND and NOT operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct InterruptFlags(pub(crate) u8);
 
 impl InterruptFlags {

@@ -5,6 +5,7 @@
 /// The row and column indices refer to the physical row and column pins on the TCA8418.
 /// The key_number field is the raw key number as reported by the TCA8418 (1-80)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeypadMatrixKey {
     /// Row index (0–7)
     pub row: u8,
@@ -46,6 +47,7 @@ impl KeypadMatrixKey {
 /// This type is wrapped in the `Key::RowGpi` and `Key::ColGpi` variants to represent GPIO events on row and column pins respectively.
 /// The key_number field is the raw key number as reported by the TCA8418, which is 97-104 for row GPIO pins and 105-114 for column GPIO pins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct GpiKey {
     /// Pin index (0–7 for rows, 0–9 for columns)
     pub index: u8,
@@ -58,6 +60,7 @@ pub struct GpiKey {
 /// - `Key::RowGpi` represents a row GPIO pin configured as an input, identified by its row index (0-7).
 /// - `Key::ColGpi` represents a column GPIO pin configured as an input, identified by its column index (0-9).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Key {
     /// A key in the keypad matrix
     KeypadMatrix(KeypadMatrixKey),
@@ -175,6 +178,7 @@ impl Key {
 /// | 97–104 | Row GPI event (R0–R7) |
 /// | 105–114 | Column GPI event (C0–C9) |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyEvent {
     /// Key number as reported by the TCA8418
     pub key_number: u8,

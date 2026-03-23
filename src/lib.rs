@@ -148,6 +148,15 @@ impl<E> From<E> for Error<E> {
     }
 }
 
+#[cfg(feature = "defmt")]
+impl<E: defmt::Format> defmt::Format for Error<E> {
+    fn format(&self, f: defmt::Formatter) {
+        match self {
+            Error::I2c(e) => defmt::write!(f, "I2c({})", e),
+        }
+    }
+}
+
 // ============================================================================
 // Driver
 // ============================================================================
