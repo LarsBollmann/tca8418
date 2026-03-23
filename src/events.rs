@@ -160,12 +160,12 @@ impl Key {
 /// }
 /// # Ok(())
 /// # }
-/// 
+///
 /// ```
-/// 
-/// If you want to use your own event type instead, you can create a struct that implements `core::convert::From<KeyEvent>` or  `core::convert::TryFrom<KeyEvent>` 
+///
+/// If you want to use your own event type instead, you can create a struct that implements `core::convert::From<KeyEvent>` or  `core::convert::TryFrom<KeyEvent>`
 /// and map the [KeyEvent] to your own type.
-/// 
+///
 /// # Key Number Ranges
 ///
 /// | Range | Type |

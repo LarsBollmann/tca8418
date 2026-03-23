@@ -15,13 +15,13 @@
 ///
 /// // Or you could do the same thing using the individual pin constants:
 /// let mask = PinMask::R0 | PinMask::R1 | PinMask::R2 | PinMask::R3 | PinMask::R4 | PinMask::C0 | PinMask::C1 | PinMask::C2 | PinMask::C3;
-/// 
+///
 /// // If you want to set all pins you can use
 /// let mask = PinMask::ALL;
-/// 
+///
 /// // Or if you want all rows and columns 0-2
 /// let mask = PinMask::ALL_ROWS | PinMask::cols(0x7);
-/// 
+///
 /// // You can also set or unset certain pins from a PinMask
 /// // Set all pins except column 9 and row 7
 /// let mask = PinMask::ALL.without(PinMask::C9).without(PinMask::R7);
