@@ -15,6 +15,16 @@
 ///
 /// // Or you could do the same thing using the individual pin constants:
 /// let mask = PinMask::R0 | PinMask::R1 | PinMask::R2 | PinMask::R3 | PinMask::R4 | PinMask::C0 | PinMask::C1 | PinMask::C2 | PinMask::C3;
+/// 
+/// // If you want to set all pins you can use
+/// let mask = PinMask::ALL;
+/// 
+/// // Or if you want all rows and columns 0-2
+/// let mask = PinMask::ALL_ROWS | PinMask::cols(0x7);
+/// 
+/// // You can also set or unset certain pins from a PinMask
+/// // Set all pins except column 9 and row 7
+/// let mask = PinMask::ALL.without(PinMask::C9).without(PinMask::R7);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PinMask(pub u32);
@@ -107,7 +117,7 @@ impl PinMask {
     /// A mask with all columns set
     pub const ALL_COLS: Self = Self(0x03FF << 8);
 
-    /// Rows
+    // Rows
     /// ROW0 Pin
     pub const R0: Self = Self(1 << 0);
     /// ROW1 Pin
@@ -125,7 +135,7 @@ impl PinMask {
     /// ROW7 Pin
     pub const R7: Self = Self(1 << 7);
 
-    /// Columns
+    // Columns
     /// COL0 Pin
     pub const C0: Self = Self(1 << 8);
     /// COL1 Pin

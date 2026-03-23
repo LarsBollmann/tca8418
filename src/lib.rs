@@ -2,7 +2,7 @@
 
 //! ## Examples
 //! The main usage is to create a [Tca8418] object using a i2c device.
-//! You can then configure it and read [KeyEvent]s from the FIFO queue.
+//! You can then configure it and read [events](KeyEvent) from the FIFO queue.
 //!
 //! ### Mixed Keypad and GPIO
 //!  
@@ -174,6 +174,7 @@ impl<E> From<E> for Error<E> {
 ///
 /// Configure which row/column pins form the keypad matrix, then poll or
 /// use interrupts to read events:
+/// See [KeyEvent] for more information about the returned event type.
 ///
 /// ```rust,no_run
 /// # use embedded_hal::i2c::I2c;
@@ -194,12 +195,12 @@ impl<E> From<E> for Error<E> {
 ///
 /// # Draining the FIFO
 ///
-/// Use [`Tca8418::events`] to create an iterator that iterates over all pending events, or
-/// [`Tca8418::read_all_events`] to collect them into a fixed-size array.
+/// Use [events()](`Tca8418::events`) to create an iterator that iterates over all pending events, or
+/// [read_all_events()](`Tca8418::read_all_events`)  to collect them into a fixed-size array.
 ///
 /// # Releasing the Bus
 ///
-/// Call [`Tca8418::release`] to consume the driver and get the I²C
+/// Call [release()](`Tca8418::release`) to consume the driver and get the I²C
 /// peripheral back.
 pub struct Tca8418<I2C> {
     i2c: I2C,

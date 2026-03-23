@@ -128,7 +128,52 @@ impl Key {
 /// The `pressed` field indicates whether the event is a key press (`true`) or a key release (`false`).
 /// The `key` field can be used to get the [Key] enum variant, which distinguishes between keypad matrix keys and GPIO events.
 ///
-/// As convenience methods, `pressed_keypad()` and `released_keypad()` return an `Option<KeypadMatrixKey>` if the event corresponds to a keypad matrix key press or release respectively, and `None` otherwise (e.g. for GPIO events).
+/// As convenience methods, [`pressed_keypad()`](KeyEvent::pressed_keypad) and [`released_keypad()`](KeyEvent::released_keypad)
+/// return `Some(`[`KeypadMatrixKey`]`)` if the event corresponds to a keypad matrix key press or release respectively,
+/// and `None` otherwise (e.g. for GPIO events).
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// # use tca8418::{Tca8418, PinMask, InterruptFlags, Key};
+/// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
+/// // Handle only keypad presses, most common case
+/// for event in keypad.events().flatten() {
+///     if let Some(key) = event.pressed_keypad() {
+///         let _ = (key.row, key.col);
+///     }
+/// }
+///
+/// // Handle different events separately
+/// for event in keypad.events().flatten() {
+///     // Is event a press or release?
+///     let pressed = event.pressed;
+///     
+///     match event.key {
+///         // Event is from a key in the configured keypad matrix
+///         Key::KeypadMatrix(k) => { /* k.row, k.col */}
+///         // Event is from a row pin configured as GPI
+///         Key::RowGpi(g)       => { /* g.index */ }
+///         // Event is from a column pin configured as GPI
+///         Key::ColGpi(g)       => { /* g.index */}
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// 
+/// ```
+/// 
+/// If you want to use your own event type instead, you can create a struct that implements `core::convert::From<KeyEvent>` or  `core::convert::TryFrom<KeyEvent>` 
+/// and map the [KeyEvent] to your own type.
+/// 
+/// # Key Number Ranges
+///
+/// | Range | Type |
+/// |---------|------|
+/// | 1–80 | Keypad matrix key (row × 10 + col + 1) |
+/// | 81–96 | Reserved (unused) |
+/// | 97–104 | Row GPI event (R0–R7) |
+/// | 105–114 | Column GPI event (C0–C9) |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeyEvent {
     /// Key number as reported by the TCA8418
@@ -158,7 +203,7 @@ impl KeyEvent {
         })
     }
 
-    /// Returns Some(KeypadMatrixKey) if the event was a key press and the pressed key is part of the keypad matrix
+    /// Returns Some([KeypadMatrixKey]) if the event was a key press and the pressed key is part of the keypad matrix
     pub fn pressed_keypad(&self) -> Option<KeypadMatrixKey> {
         if self.pressed {
             KeypadMatrixKey::from_key_number(self.key_number)
@@ -167,7 +212,7 @@ impl KeyEvent {
         }
     }
 
-    /// Returns Some(KeypadMatrixKey) if the event was a key release and the pressed key is part of the keypad matrix
+    /// Returns Some([KeypadMatrixKey]) if the event was a key release and the pressed key is part of the keypad matrix
     pub fn released_keypad(&self) -> Option<KeypadMatrixKey> {
         if !self.pressed {
             KeypadMatrixKey::from_key_number(self.key_number)
