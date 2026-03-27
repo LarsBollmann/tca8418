@@ -379,12 +379,16 @@ where
     }
 
     /// Enable or disable overflow interrupts on the INT pin.
+    ///
+    /// Also sets the OVR_FLOW_M to 1 when enabled and to 0 while disabled.
+    /// Both need to be enabled for the interrupt output to be pulled low when overflow occurs.
+    /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
     pub fn enable_overflow_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if enable {
-                v | Config::OVR_FLOW_IEN
+                v | Config::OVR_FLOW_IEN | Config::OVR_FLOW_M
             } else {
-                v & !Config::OVR_FLOW_IEN
+                v & !Config::OVR_FLOW_IEN & !Config::OVR_FLOW_M
             }
         })
     }
@@ -393,6 +397,7 @@ where
     /// - `false`: FIFO stops accepting events when full
     /// - `true`: FIFO wraps, oldest events are overwritten
     ///
+    /// Needs to be enabled for overflow interrupts to work.
     /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
     pub fn set_overflow_mode_wrap(&mut self, wrap: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
