@@ -95,7 +95,10 @@ pub mod events;
 mod pins;
 pub mod registers;
 
+#[cfg(not(feature = "async"))]
 use embedded_hal::i2c::I2c;
+#[cfg(feature = "async")]
+use embedded_hal_async::i2c::I2c;
 pub use pins::PinMask;
 pub use registers::{Config, Register};
 
@@ -241,16 +244,34 @@ where
     // Read events
 
     /// Get the number of events currently in the FIFO (0–10).
+    #[cfg(not(feature = "async"))]
     pub fn event_count(&mut self) -> Result<u8, Error<E>> {
         let val = self.read_register(Register::KeyLckEc)?;
+        Ok(val & 0x0F)
+    }
+
+    /// Get the number of events currently in the FIFO (0–10).
+    #[cfg(feature = "async")]
+    pub async fn event_count(&mut self) -> Result<u8, Error<E>> {
+        let val = self.read_register(Register::KeyLckEc).await?;
         Ok(val & 0x0F)
     }
 
     /// Read a single key event from the FIFO.
     ///
     /// Returns `None` if the FIFO is empty.
+    #[cfg(not(feature = "async"))]
     pub fn read_event(&mut self) -> Result<Option<KeyEvent>, Error<E>> {
         let raw = self.read_register(Register::KeyEventA)?;
+        Ok(KeyEvent::from_raw(raw))
+    }
+
+    /// Read a single key event from the FIFO.
+    ///
+    /// Returns `None` if the FIFO is empty.
+    #[cfg(feature = "async")]
+    pub async fn read_event(&mut self) -> Result<Option<KeyEvent>, Error<E>> {
+        let raw = self.read_register(Register::KeyEventA).await?;
         Ok(KeyEvent::from_raw(raw))
     }
 
@@ -259,6 +280,7 @@ where
     ///
     /// This reads the event count once, drains that many events,
     /// and returns an iterator that requires no further I²C access.
+    #[cfg(not(feature = "async"))]
     pub fn events(&mut self) -> Result<EventIter, Error<E>> {
         let count = self.event_count()?;
         let mut events = [None; 10];
@@ -271,10 +293,30 @@ where
             count: count.min(10),
         })
     }
+
+    /// Drain all pending events from the FIFO into a fixed-size array
+    /// and return an iterator over them.
+    ///
+    /// This reads the event count once, drains that many events,
+    /// and returns an iterator that requires no further I²C access.
+    #[cfg(feature = "async")]
+    pub async fn events(&mut self) -> Result<EventIter, Error<E>> {
+        let count = self.event_count().await?;
+        let mut events = [None; 10];
+        for i in 0..count.min(10) {
+            events[i as usize] = self.read_event().await?;
+        }
+        Ok(EventIter {
+            events,
+            index: 0,
+            count: count.min(10),
+        })
+    }
     /// Drain all pending events from the FIFO.
     ///
     /// Returns a `heapless`-style fixed-size array of up to 10 events.
     /// The returned tuple is `(events_array, count)`.
+    #[cfg(not(feature = "async"))]
     pub fn read_all_events(&mut self) -> Result<([Option<KeyEvent>; 10], u8), Error<E>> {
         let count = self.event_count()?;
         let mut events = [None; 10];
@@ -284,23 +326,57 @@ where
         Ok((events, count))
     }
 
+    /// Drain all pending events from the FIFO.
+    ///
+    /// Returns a `heapless`-style fixed-size array of up to 10 events.
+    /// The returned tuple is `(events_array, count)`.
+    #[cfg(feature = "async")]
+    pub async fn read_all_events(&mut self) -> Result<([Option<KeyEvent>; 10], u8), Error<E>> {
+        let count = self.event_count().await?;
+        let mut events = [None; 10];
+        for i in 0..count.min(10) {
+            events[i as usize] = self.read_event().await?;
+        }
+        Ok((events, count))
+    }
+
     // ========================================================================
     // Low-level register access
     // ========================================================================
 
     /// Write a single byte to a register.
+    #[cfg(feature = "async")]
+    pub async fn write_register(&mut self, reg: Register, value: u8) -> Result<(), Error<E>> {
+        self.i2c.write(self.addr, &[reg as u8, value]).await?;
+        Ok(())
+    }
+
+    /// Write a single byte to a register.
+    #[cfg(not(feature = "async"))]
     pub fn write_register(&mut self, reg: Register, value: u8) -> Result<(), Error<E>> {
         self.i2c.write(self.addr, &[reg as u8, value])?;
         Ok(())
     }
 
     /// Read a single byte from a register.
+    #[cfg(feature = "async")]
+    pub async fn read_register(&mut self, reg: Register) -> Result<u8, Error<E>> {
+        let mut buf = [0u8; 1];
+        self.i2c
+            .write_read(self.addr, &[reg as u8], &mut buf)
+            .await?;
+        Ok(buf[0])
+    }
+
+    /// Read a single byte from a register.
+    #[cfg(not(feature = "async"))]
     pub fn read_register(&mut self, reg: Register) -> Result<u8, Error<E>> {
         let mut buf = [0u8; 1];
         self.i2c.write_read(self.addr, &[reg as u8], &mut buf)?;
         Ok(buf[0])
     }
 
+    #[cfg(not(feature = "async"))]
     pub(crate) fn write_multiple_registers(
         &mut self,
         reg_row: Register,
@@ -314,6 +390,23 @@ where
         Ok(())
     }
 
+    #[cfg(feature = "async")]
+    pub(crate) async fn write_multiple_registers(
+        &mut self,
+        reg_row: Register,
+        reg_col_low: Register,
+        reg_col_high: Register,
+        pins: PinMask,
+    ) -> Result<(), Error<E>> {
+        self.write_register(reg_row, pins.row_bits()).await?;
+        self.write_register(reg_col_low, pins.col_low_bits())
+            .await?;
+        self.write_register(reg_col_high, pins.col_high_bits())
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(not(feature = "async"))]
     pub(crate) fn read_multiple_registers(
         &mut self,
         reg_row: Register,
@@ -328,13 +421,39 @@ where
             | PinMask::cols_high(col_high_bits))
     }
 
+    #[cfg(feature = "async")]
+    pub(crate) async fn read_multiple_registers(
+        &mut self,
+        reg_row: Register,
+        reg_col_low: Register,
+        reg_col_high: Register,
+    ) -> Result<PinMask, Error<E>> {
+        let row_bits = self.read_register(reg_row).await?;
+        let col_low_bits = self.read_register(reg_col_low).await?;
+        let col_high_bits = self.read_register(reg_col_high).await?;
+        Ok(PinMask::rows(row_bits)
+            | PinMask::cols_low(col_low_bits)
+            | PinMask::cols_high(col_high_bits))
+    }
+
     /// Modify a register using a read-modify-write cycle.
+    #[cfg(not(feature = "async"))]
     pub fn modify_register<F>(&mut self, reg: Register, f: F) -> Result<(), Error<E>>
     where
         F: FnOnce(u8) -> u8,
     {
         let val = self.read_register(reg)?;
         self.write_register(reg, f(val))
+    }
+
+    /// Modify a register using a read-modify-write cycle.
+    #[cfg(feature = "async")]
+    pub async fn modify_register<F>(&mut self, reg: Register, f: F) -> Result<(), Error<E>>
+    where
+        F: FnOnce(u8) -> u8,
+    {
+        let val = self.read_register(reg).await?;
+        self.write_register(reg, f(val)).await
     }
 
     // ========================================================================
@@ -346,6 +465,7 @@ where
     /// - `pins`: A bitmask of pins to configure as keypad pins. Use [`PinMask::rows`] and [`PinMask::cols`] to create the mask.
     ///
     /// Pins set to 1 are keypad pins; pins set to 0 are GPIO.
+    #[cfg(not(feature = "async"))]
     pub fn configure_keypad(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::KpGpio1,
@@ -356,7 +476,25 @@ where
         Ok(())
     }
 
+    /// Configure which pins participate in the keypad matrix or which ones are used as GPIO.
+    ///
+    /// - `pins`: A bitmask of pins to configure as keypad pins. Use [`PinMask::rows`] and [`PinMask::cols`] to create the mask.
+    ///
+    /// Pins set to 1 are keypad pins; pins set to 0 are GPIO.
+    #[cfg(feature = "async")]
+    pub async fn configure_keypad(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::KpGpio1,
+            Register::KpGpio2,
+            Register::KpGpio3,
+            pins,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Enable or disable key event interrupts on the INT pin.
+    #[cfg(not(feature = "async"))]
     pub fn enable_key_event_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if enable {
@@ -367,7 +505,21 @@ where
         })
     }
 
+    /// Enable or disable key event interrupts on the INT pin.
+    #[cfg(feature = "async")]
+    pub async fn enable_key_event_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
+        self.modify_register(Register::Cfg, |v| {
+            if enable {
+                v | Config::KE_IEN
+            } else {
+                v & !Config::KE_IEN
+            }
+        })
+        .await
+    }
+
     /// Enable or disable GPI (general purpose input) interrupts on the INT pin.
+    #[cfg(not(feature = "async"))]
     pub fn enable_gpi_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if enable {
@@ -378,11 +530,25 @@ where
         })
     }
 
+    /// Enable or disable GPI (general purpose input) interrupts on the INT pin.
+    #[cfg(feature = "async")]
+    pub async fn enable_gpi_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
+        self.modify_register(Register::Cfg, |v| {
+            if enable {
+                v | Config::GPI_IEN
+            } else {
+                v & !Config::GPI_IEN
+            }
+        })
+        .await
+    }
+
     /// Enable or disable overflow interrupts on the INT pin.
     ///
     /// Also sets the OVR_FLOW_M to 1 when enabled and to 0 while disabled.
     /// Both need to be enabled for the interrupt output to be pulled low when overflow occurs.
     /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
+    #[cfg(not(feature = "async"))]
     pub fn enable_overflow_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if enable {
@@ -393,12 +559,30 @@ where
         })
     }
 
+    /// Enable or disable overflow interrupts on the INT pin.
+    ///
+    /// Also sets the OVR_FLOW_M to 1 when enabled and to 0 while disabled.
+    /// Both need to be enabled for the interrupt output to be pulled low when overflow occurs.
+    /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
+    #[cfg(feature = "async")]
+    pub async fn enable_overflow_interrupt(&mut self, enable: bool) -> Result<(), Error<E>> {
+        self.modify_register(Register::Cfg, |v| {
+            if enable {
+                v | Config::OVR_FLOW_IEN | Config::OVR_FLOW_M
+            } else {
+                v & !Config::OVR_FLOW_IEN & !Config::OVR_FLOW_M
+            }
+        })
+        .await
+    }
+
     /// Set overflow mode.
     /// - `false`: FIFO stops accepting events when full
     /// - `true`: FIFO wraps, oldest events are overwritten
     ///
     /// Needs to be enabled for overflow interrupts to work.
     /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
+    #[cfg(not(feature = "async"))]
     pub fn set_overflow_mode_wrap(&mut self, wrap: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if wrap {
@@ -408,10 +592,28 @@ where
             }
         })
     }
+    /// Set overflow mode.
+    /// - `false`: FIFO stops accepting events when full
+    /// - `true`: FIFO wraps, oldest events are overwritten
+    ///
+    /// Needs to be enabled for overflow interrupts to work.
+    /// **Note:** See the TCA8418 datasheet errata section for overflow behavior issues.
+    #[cfg(feature = "async")]
+    pub async fn set_overflow_mode_wrap(&mut self, wrap: bool) -> Result<(), Error<E>> {
+        self.modify_register(Register::Cfg, |v| {
+            if wrap {
+                v | Config::OVR_FLOW_M
+            } else {
+                v & !Config::OVR_FLOW_M
+            }
+        })
+        .await
+    }
 
     /// Set the INT deassertion behavior.
     /// When enabled, clearing the interrupt causes a 50ms deassertion
     /// before re-asserting if events are still pending.
+    #[cfg(not(feature = "async"))]
     pub fn set_int_retrigger(&mut self, enable: bool) -> Result<(), Error<E>> {
         self.modify_register(Register::Cfg, |v| {
             if enable {
@@ -422,37 +624,95 @@ where
         })
     }
 
+    /// Set the INT deassertion behavior.
+    /// When enabled, clearing the interrupt causes a 50ms deassertion
+    /// before re-asserting if events are still pending.
+    #[cfg(feature = "async")]
+    pub async fn set_int_retrigger(&mut self, enable: bool) -> Result<(), Error<E>> {
+        self.modify_register(Register::Cfg, |v| {
+            if enable {
+                v | Config::INT_CFG
+            } else {
+                v & !Config::INT_CFG
+            }
+        })
+        .await
+    }
+
     /// Write the full CFG register directly.
+    #[cfg(not(feature = "async"))]
     pub fn set_config_raw(&mut self, value: u8) -> Result<(), Error<E>> {
         self.write_register(Register::Cfg, value)
     }
 
+    /// Write the full CFG register directly.
+    #[cfg(feature = "async")]
+    pub async fn set_config_raw(&mut self, value: u8) -> Result<(), Error<E>> {
+        self.write_register(Register::Cfg, value).await
+    }
+
     /// Read the full CFG register directly
+    #[cfg(not(feature = "async"))]
     pub fn read_config_raw(&mut self) -> Result<u8, Error<E>> {
         self.read_register(Register::Cfg)
     }
 
+    /// Read the full CFG register directly
+    #[cfg(feature = "async")]
+    pub async fn read_config_raw(&mut self) -> Result<u8, Error<E>> {
+        self.read_register(Register::Cfg).await
+    }
     // Interrupt handling
 
     /// Read the interrupt status register.
+    #[cfg(not(feature = "async"))]
     pub fn interrupt_status(&mut self) -> Result<InterruptFlags, Error<E>> {
         Ok(InterruptFlags(self.read_register(Register::IntStat)?))
     }
 
+    /// Read the interrupt status register.
+    #[cfg(feature = "async")]
+    pub async fn interrupt_status(&mut self) -> Result<InterruptFlags, Error<E>> {
+        Ok(InterruptFlags(self.read_register(Register::IntStat).await?))
+    }
+
     /// Check if there is a pending key event interrupt
+    #[cfg(not(feature = "async"))]
     pub fn has_pending_key_event(&mut self) -> Result<bool, Error<E>> {
         let status = self.interrupt_status()?;
         Ok(status.contains(InterruptFlags::K_INT))
     }
 
+    /// Check if there is a pending key event interrupt
+    #[cfg(feature = "async")]
+    pub async fn has_pending_key_event(&mut self) -> Result<bool, Error<E>> {
+        let status = self.interrupt_status().await?;
+        Ok(status.contains(InterruptFlags::K_INT))
+    }
+
     /// Clear specific interrupt flags by writing 1 to the corresponding bits.
+    #[cfg(not(feature = "async"))]
     pub fn clear_interrupts(&mut self, interrupts: InterruptFlags) -> Result<(), Error<E>> {
         self.write_register(Register::IntStat, interrupts.bits())
     }
 
+    /// Clear specific interrupt flags by writing 1 to the corresponding bits.
+    #[cfg(feature = "async")]
+    pub async fn clear_interrupts(&mut self, interrupts: InterruptFlags) -> Result<(), Error<E>> {
+        self.write_register(Register::IntStat, interrupts.bits())
+            .await
+    }
+
     /// Clear all interrupt flags.
+    #[cfg(not(feature = "async"))]
     pub fn clear_all_interrupts(&mut self) -> Result<(), Error<E>> {
         self.clear_interrupts(InterruptFlags::ALL)
+    }
+
+    /// Clear all interrupt flags.
+    #[cfg(feature = "async")]
+    pub async fn clear_all_interrupts(&mut self) -> Result<(), Error<E>> {
+        self.clear_interrupts(InterruptFlags::ALL).await
     }
 
     // GPIO Configuration
@@ -460,6 +720,7 @@ where
     /// Set GPIO direction according to the provided pin mask.
     /// Bit = 0: input, Bit = 1: output.
     /// Only affects pins NOT configured as keypad pins.
+    #[cfg(not(feature = "async"))]
     pub fn set_gpio_direction(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::GpioDir1,
@@ -469,13 +730,27 @@ where
         )
     }
 
+    /// Set GPIO direction according to the provided pin mask.
+    /// Bit = 0: input, Bit = 1: output.
+    /// Only affects pins NOT configured as keypad pins.
+    #[cfg(feature = "async")]
+    pub async fn set_gpio_direction(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::GpioDir1,
+            Register::GpioDir2,
+            Register::GpioDir3,
+            pins,
+        )
+        .await
+    }
+
     /// Write GPIO output values according to the provided pin mask.
     /// Bit = 0: output low, Bit = 1: output high.
     /// Only affects pins configured as GPIO output.
     ///
     /// ```rust,no_run
     /// # use tca8418::{Tca8418, PinMask};
-    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {    
+    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
     /// // Only set C9 high, every other pin will be set low
     /// keypad.write_gpio(PinMask::C9)?;
     ///
@@ -490,6 +765,7 @@ where
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "async"))]
     pub fn write_gpio(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::GpioDatOut1,
@@ -499,13 +775,45 @@ where
         )
     }
 
+    /// Write GPIO output values according to the provided pin mask.
+    /// Bit = 0: output low, Bit = 1: output high.
+    /// Only affects pins configured as GPIO output.
+    ///
+    /// ```rust,no_run
+    /// # use tca8418::{Tca8418, PinMask};
+    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
+    /// // Only set C9 high, every other pin will be set low
+    /// keypad.write_gpio(PinMask::C9)?;
+    ///
+    /// // Set C3 high, everything else stays as-is
+    /// let current = keypad.read_gpio()?;
+    /// keypad.write_gpio(current.with(PinMask::C3))?;
+    ///
+    /// // Set C3 low
+    /// keypad.write_gpio(current.without(PinMask::C3))?;
+    ///
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "async")]
+    pub async fn write_gpio(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::GpioDatOut1,
+            Register::GpioDatOut2,
+            Register::GpioDatOut3,
+            pins,
+        )
+        .await
+    }
+
     /// Read GPIO data status for all pins, returning a `PinMask` with the current states of all row and column pins.
     /// If debouncing is enabled, these registers return their default values until a change of state occurs at an input.
     /// Initial pin states can be read by disabling debouncing.
     ///
     /// ```rust,no_run
     /// # use tca8418::{Tca8418, PinMask};
-    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {    
+    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
     /// let gpio_status = keypad.read_gpio()?;
     /// if gpio_status.contains(PinMask::R0) {
     ///     // R0 is high
@@ -513,7 +821,8 @@ where
     /// # Ok(())
     /// # }
     /// ```
-    pub fn read_gpio(&mut self) -> Result<PinMask, Error<E>> {
+    #[cfg(not(feature = "async"))]
+    pub async fn read_gpio(&mut self) -> Result<PinMask, Error<E>> {
         self.read_multiple_registers(
             Register::GpioDatStat1,
             Register::GpioDatStat2,
@@ -521,10 +830,34 @@ where
         )
     }
 
+    /// Read GPIO data status for all pins, returning a `PinMask` with the current states of all row and column pins.
+    /// If debouncing is enabled, these registers return their default values until a change of state occurs at an input.
+    /// Initial pin states can be read by disabling debouncing.
+    ///
+    /// ```rust,no_run
+    /// # use tca8418::{Tca8418, PinMask};
+    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
+    /// let gpio_status = keypad.read_gpio()?;
+    /// if gpio_status.contains(PinMask::R0) {
+    ///     // R0 is high
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "async")]
+    pub async fn read_gpio(&mut self) -> Result<PinMask, Error<E>> {
+        self.read_multiple_registers(
+            Register::GpioDatStat1,
+            Register::GpioDatStat2,
+            Register::GpioDatStat3,
+        )
+        .await
+    }
     // Pull-up resistor control
 
     /// Disable internal pull-up resistors according to the provided pin mask.
     /// Bit = 0 (default) means pull-up enabled for that pin, Bit = 1 means pull-up disabled.
+    #[cfg(not(feature = "async"))]
     pub fn disable_pullups(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::GpioPullDis1,
@@ -534,10 +867,23 @@ where
         )
     }
 
+    /// Disable internal pull-up resistors according to the provided pin mask.
+    /// Bit = 0 (default) means pull-up enabled for that pin, Bit = 1 means pull-up disabled.
+    #[cfg(feature = "async")]
+    pub async fn disable_pullups(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::GpioPullDis1,
+            Register::GpioPullDis2,
+            Register::GpioPullDis3,
+            pins,
+        )
+        .await
+    }
     // Debounce control
 
     /// Disable debounce according to the provided pin mask.
     /// Bit = 1: debounce disabled for that pin.
+    #[cfg(not(feature = "async"))]
     pub fn disable_debounce(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::DebounceDis1,
@@ -547,18 +893,42 @@ where
         )
     }
 
+    /// Disable debounce according to the provided pin mask.
+    /// Bit = 1: debounce disabled for that pin.
+    #[cfg(feature = "async")]
+    pub async fn disable_debounce(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::DebounceDis1,
+            Register::DebounceDis2,
+            Register::DebounceDis3,
+            pins,
+        )
+        .await
+    }
     // GPI Event mode
 
     /// Set GPI event mode according to the provided pin mask.
     /// This only applies to pins configured as GPIO pins.
     /// Bit = 0: events tracked in status register (default), Bit = 1: events go into FIFO.
     /// Must be set to 0 to be able to use GPI pins for a unlock sequence in locked mode.
+    #[cfg(not(feature = "async"))]
     pub fn set_gpi_event_mode(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(Register::GpiEm1, Register::GpiEm2, Register::GpiEm3, pins)
     }
 
+    /// Set GPI event mode according to the provided pin mask.
+    /// This only applies to pins configured as GPIO pins.
+    /// Bit = 0: events tracked in status register (default), Bit = 1: events go into FIFO.
+    /// Must be set to 0 to be able to use GPI pins for a unlock sequence in locked mode.
+    #[cfg(feature = "async")]
+    pub async fn set_gpi_event_mode(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(Register::GpiEm1, Register::GpiEm2, Register::GpiEm3, pins)
+            .await
+    }
+
     /// Enable GPIO interrupts according to the provided pin mask.
     /// Bit = 0: no interrupt generated, Bit = 1: interrupt generated on event.
+    #[cfg(not(feature = "async"))]
     pub fn enable_gpio_interrupt(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::GpioIntEn1,
@@ -568,9 +938,23 @@ where
         )
     }
 
+    /// Enable GPIO interrupts according to the provided pin mask.
+    /// Bit = 0: no interrupt generated, Bit = 1: interrupt generated on event.
+    #[cfg(feature = "async")]
+    pub async fn enable_gpio_interrupt(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::GpioIntEn1,
+            Register::GpioIntEn2,
+            Register::GpioIntEn3,
+            pins,
+        )
+        .await
+    }
+
     /// Set GPIO interrupt detection level according to the provided pin mask.
     /// This only affects pins configured as GPIO inputs with interrupts enabled.
     /// Bit = 0: low level / falling edge triggers, Bit = 1: high level / rising edge.
+    #[cfg(not(feature = "async"))]
     pub fn set_gpio_int_level(&mut self, pins: PinMask) -> Result<(), Error<E>> {
         self.write_multiple_registers(
             Register::GpioIntLvl1,
@@ -580,26 +964,67 @@ where
         )
     }
 
+    /// Set GPIO interrupt detection level according to the provided pin mask.
+    /// This only affects pins configured as GPIO inputs with interrupts enabled.
+    /// Bit = 0: low level / falling edge triggers, Bit = 1: high level / rising edge.
+    #[cfg(feature = "async")]
+    pub async fn set_gpio_int_level(&mut self, pins: PinMask) -> Result<(), Error<E>> {
+        self.write_multiple_registers(
+            Register::GpioIntLvl1,
+            Register::GpioIntLvl2,
+            Register::GpioIntLvl3,
+            pins,
+        )
+        .await
+    }
     // Keypad lock
 
     /// Check if the keypad is currently locked.
+    #[cfg(not(feature = "async"))]
     pub fn is_locked(&mut self) -> Result<bool, Error<E>> {
         let val = self.read_register(Register::KeyLckEc)?;
         Ok(val & 0x40 != 0)
     }
 
+    /// Check if the keypad is currently locked.
+    #[cfg(feature = "async")]
+    pub async fn is_locked(&mut self) -> Result<bool, Error<E>> {
+        let val = self.read_register(Register::KeyLckEc).await?;
+        Ok(val & 0x40 != 0)
+    }
+
     /// Set the keypad interrupt mask timer (0–31 seconds). 0 disables.
     /// This controls how often interrupts are generated while the keypad is locked.
+    #[cfg(not(feature = "async"))]
     pub fn set_interrupt_mask_timer(&mut self, seconds: u8) -> Result<(), Error<E>> {
         let clamped = seconds.min(31);
         self.modify_register(Register::KpLckTimer, |v| (v & 0x07) | (clamped << 3))
     }
 
+    /// Set the keypad interrupt mask timer (0–31 seconds). 0 disables.
+    /// This controls how often interrupts are generated while the keypad is locked.
+    #[cfg(feature = "async")]
+    pub async fn set_interrupt_mask_timer(&mut self, seconds: u8) -> Result<(), Error<E>> {
+        let clamped = seconds.min(31);
+        self.modify_register(Register::KpLckTimer, |v| (v & 0x07) | (clamped << 3))
+            .await
+    }
+
     /// Set the unlock key sequence timer (0–7 seconds).
     /// This is the maximum time allowed between pressing unlock key 1 and unlock key 2.
+    #[cfg(not(feature = "async"))]
     pub fn set_unlock_timer(&mut self, seconds: u8) -> Result<(), Error<E>> {
         let clamped = seconds.min(7);
         self.modify_register(Register::KpLckTimer, |v| (v & 0xF8) | clamped)
+    }
+
+    /// Set the unlock key sequence timer (0–7 seconds).
+    /// This is the maximum time allowed between pressing unlock key 1 and unlock key 2.
+    #[cfg(feature = "async")]
+    pub async fn set_unlock_timer(&mut self, seconds: u8) -> Result<(), Error<E>> {
+        let clamped = seconds.min(7);
+        self.modify_register(Register::KpLckTimer, |v| (v & 0xF8) | clamped)
+            .await
     }
 
     /// Set the unlock key combination (two key numbers).
@@ -613,20 +1038,57 @@ where
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(not(feature = "async"))]
     pub fn set_unlock_keys(&mut self, key1: Key, key2: Key) -> Result<(), Error<E>> {
         self.write_register(Register::Unlock1, key1.get_key_number() & 0x7F)?;
         self.write_register(Register::Unlock2, key2.get_key_number() & 0x7F)?;
         Ok(())
     }
 
+    /// Set the unlock key combination (two key numbers).
+    ///
+    /// ```rust,no_run
+    /// use tca8418::{Key,Tca8418};
+    /// # fn run<E: core::fmt::Debug>(keypad: &mut Tca8418<impl embedded_hal::i2c::I2c<Error = E>>) -> Result<(), tca8418::Error<E>> {
+    ///
+    /// // Set the keys at positions 0,1 and 3,3 in the keypad matrix as the unlock sequence
+    /// keypad.set_unlock_keys(Key::from_row_col(0, 1).unwrap(), Key::from_row_col(3, 3).unwrap()).unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "async")]
+    pub async fn set_unlock_keys(&mut self, key1: Key, key2: Key) -> Result<(), Error<E>> {
+        self.write_register(Register::Unlock1, key1.get_key_number() & 0x7F)
+            .await?;
+        self.write_register(Register::Unlock2, key2.get_key_number() & 0x7F)
+            .await?;
+        Ok(())
+    }
+
     /// Lock the keypad, preventing key event interrupts and FIFO recording.
     /// Configure unlock keys and timers before calling this.
+    #[cfg(not(feature = "async"))]
     pub fn lock(&mut self) -> Result<(), Error<E>> {
         self.modify_register(Register::KeyLckEc, |v| v | 0x40)
     }
 
+    /// Lock the keypad, preventing key event interrupts and FIFO recording.
+    /// Configure unlock keys and timers before calling this.
+    #[cfg(feature = "async")]
+    pub async fn lock(&mut self) -> Result<(), Error<E>> {
+        self.modify_register(Register::KeyLckEc, |v| v | 0x40).await
+    }
+
     /// Manually unlock the keypad.
+    #[cfg(not(feature = "async"))]
     pub fn unlock(&mut self) -> Result<(), Error<E>> {
         self.modify_register(Register::KeyLckEc, |v| v & !0x40)
+    }
+
+    /// Manually unlock the keypad.
+    #[cfg(feature = "async")]
+    pub async fn unlock(&mut self) -> Result<(), Error<E>> {
+        self.modify_register(Register::KeyLckEc, |v| v & !0x40)
+            .await
     }
 }
